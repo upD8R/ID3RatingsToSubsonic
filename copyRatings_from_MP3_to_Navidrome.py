@@ -24,11 +24,11 @@ musicDict = {}
 subsonic = libsonic.Connection(subsonic_url, subsonic_username, subsonic_password, port=subsonic_port, appName='MP3/Subsonic rating script')
 
 def populate_dictionary():
-    print("\n>> Getting all indexes from subsonic server...")
+    print("\n>> Getting all indexes from Subsonic server...")
     indexes = subsonic.getIndexes()
     for index in indexes['indexes']['index']:
-       print(">>>> Reading songs from artists starting with " + index['name'] + "...  \r", end='')
-       for artist in index['artist']:
+        print(">>>> Reading songs from artists starting with " + index['name'] + "...  \r", end='')
+        for artist in index['artist']:
             albums = subsonic.getArtist(artist['id'])
             for album in albums['artist']['album']:
                 songs = subsonic.getAlbum(album['id'])
@@ -88,8 +88,35 @@ def get_album_title_from_id3(file_path):
             return frame.text
     return None
 
-def main(directory, skip_subsonic=False):
-    print("\nThis script reads ID3 tag ratings of all MP3s in the given directory (recursively) and\nwrites them into the 5 star user rating value of a Subsonic server.\n\nPlease note: Existing ratings of affected songs in Subsonic will be REPLACED!\nDepending on the number of MP3 files this process may take a while, please be patient!")
+def populate_dictionary_with_ratings():
+    print("\nThis script deletes existing user ratings in a Subsonic server, use it on your own risk!\nSimulation mode (-s) is ignored, changes will be executed on Subsonic server!")
+
+    go_on = input("\nDo you want to proceed? (yes/NO) ")
+    if go_on.lower() != 'yes':
+        return
+    else:
+        print('')
+
+    print(">> Getting all songs from Subsonic server...")
+    indexes = subsonic.getIndexes()
+    progress = 0
+    print("Deleted user ratings: 0\r", end='')
+    for index in indexes['indexes']['index']:
+        for artist in index['artist']:
+            albums = subsonic.getArtist(artist['id'])
+            for album in albums['artist']['album']:
+                songs = subsonic.getAlbum(album['id'])
+                for song_info in songs['album']['song']:
+                    if 'userRating' in song_info and song_info['userRating'] > 0:
+                        progress = progress + 1
+                        musicDict[song_info['id']] = song_info['userRating']
+                        subsonic.setRating(song_info['id'], 0)
+                        print(f"Deleted user ratings: {progress}\r", end='')
+    print("\n>> Finished deleting user ratings.")
+
+def main(directory, skip_subsonic=False, delete_user_ratings=False):
+    print("\nThis script reads ID3 tag ratings of all MP3s in the given directory (recursively) and\nwrites them into the 5-star user rating value of a Subsonic server.\n\nPlease note: Existing ratings of affected songs in Subsonic will be REPLACED!\nDepending on the number of MP3 files, this process may take a while. Please be patient!")
+
     go_on = input("\nDo you want to proceed? (yes/NO) ")
     if go_on.lower() != 'yes':
         return
@@ -100,6 +127,10 @@ def main(directory, skip_subsonic=False):
 
     if not mp3_files:
         print(f"\nCouldn't find any MP3 files in {directory}")
+        return
+
+    if delete_user_ratings:
+        populate_dictionary_with_ratings()
         return
 
     populate_dictionary()
@@ -126,16 +157,22 @@ def main(directory, skip_subsonic=False):
 
     print(f"\n>> Updated {songs_updated} rating(s) in Subsonic")
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Script to copy user ratings from MP3 IDs to a Subsonic server")
-    parser.add_argument("directory", help="The directory containing your MP3s (also sub folders will be considered)")
+    parser = argparse.ArgumentParser(description="Script to copy user ratings from MP3 IDs to a Subsonic server or to delete user ratings in Subsonic")
+    parser.add_argument("directory", nargs="?", help="The directory containing your MP3s (also subfolders will be considered)")
     parser.add_argument("-s", "--skip-subsonic", action="store_true", help="Skip Subsonic rating update (simulation mode)")
+    parser.add_argument("-d", "--delete-user-ratings", action="store_true", help="Delete user ratings from Subsonic server")
 
     args = parser.parse_args()
 
-    directory = args.directory
-    skip_subsonic = args.skip_subsonic
+    if not any(vars(args).values()):
+        parser.print_help()
+    else:
+        directory = args.directory
+        skip_subsonic = args.skip_subsonic
+        delete_user_ratings = args.delete_user_ratings
 
-    main(directory, skip_subsonic)
-
+        if delete_user_ratings:
+            populate_dictionary_with_ratings()
+        else:
+            main(directory, skip_subsonic, delete_user_ratings)

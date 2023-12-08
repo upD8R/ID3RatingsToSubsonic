@@ -50,6 +50,8 @@ If you add -s as parameter the actual update of the ratings in the Subsonic serv
 
 In any case there are no write actions on the MP3 files, only the Subsonic database will be updated with a rating, if found.
 
+There is another option -d, this doesn't require a directory as it will delete all user ratings from the configured Subsonic server. There is no simulation mode, so -s is ignored if using -d, so please be careful.
+
 ## Disclaimer
 
 **Use this script at your own risk.**
